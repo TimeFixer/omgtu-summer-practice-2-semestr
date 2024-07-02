@@ -41,6 +41,214 @@
 
 // здесь писать код
 
+#!csharp
+
+// Для BlockingCollection
+#r "nuget:ScottPlot, 5.0.36"
+using Microsoft.DotNet.Interactive.Formatting;
+using System.Collections.Concurrent;
+using System.Threading;
+using System.Diagnostics;
+
+long[] ReadWrite = new long[10];
+long[] Read = new long[10];
+
+for (int i = 0; i<10; i++){
+BlockingCollection<object> blockcollect =  new BlockingCollection<object>();
+ManualResetEvent ResentStart = new ManualResetEvent(false);
+ManualResetEvent ResentComplete= new ManualResetEvent(false);
+long countObject = 1000000;
+bool flag = true;
+Thread threadW = new Thread(() =>
+{
+    ResentStart.WaitOne();
+    while(flag)
+        {
+        if(countObject>0)
+        {
+                blockcollect.Add(new object());
+                Interlocked.Decrement(ref countObject);
+        }
+        if(countObject == 0 && blockcollect.Count==0)
+            flag = false;
+    }
+});
+Thread threadR = new Thread(() =>
+{
+    ResentStart.WaitOne();
+    Stopwatch WatchRead = Stopwatch.StartNew();
+    while(flag)   
+        {
+            if(blockcollect.Count != 0)
+            {
+                blockcollect.Take();
+            }
+        }
+    ResentComplete.Set();
+    WatchRead.Stop();
+    Read[i] = WatchRead.ElapsedMilliseconds;
+});
+threadW.Start();
+threadR.Start();
+
+ResentStart.Set();
+
+Stopwatch TimeReadWrite = Stopwatch.StartNew();
+ResentComplete.WaitOne();
+TimeReadWrite.Stop();
+threadW.Join();
+threadR.Join();
+ReadWrite[i] = TimeReadWrite.ElapsedMilliseconds;
+}
+var ReadavverageFORBlockingCollection = Read.Average();
+var ReadWriteavverageFORBlockingCollection = ReadWrite.Average();
+
+Formatter.Register(typeof(ScottPlot.Plot), (p, w) => 
+w.Write(((ScottPlot.Plot)p).GetImageHtml(400, 300)), HtmlFormatter.MimeType);
+int[] numbers = Enumerable.Range(1,10).Select(x=>x).ToArray();
+ScottPlot.Plot graph1 = new();
+ScottPlot.Plot graph2 = new();
+graph1.Add.Scatter(numbers, Read);
+graph2.Add.Scatter(numbers, ReadWrite);
+Console.WriteLine("Время чтения");
+graph1
+
+#!csharp
+
+Console.WriteLine("Время чтения + записи");
+graph2
+
+#!csharp
+
+/// Для ConcurrentQueue
+#r "nuget:ScottPlot, 5.0.36"
+using Microsoft.DotNet.Interactive.Formatting;
+using System.Collections.Concurrent;
+using System.Threading;
+using System.Diagnostics;
+
+long[] ReadWrite = new long[10];
+long[] Read = new long[10];
+object obj = new object();
+for (int i = 0; i<10; i++){
+ConcurrentQueue<object> ConcurrentQueue=  new ConcurrentQueue<object>();
+ManualResetEvent ResentStart = new ManualResetEvent(false);
+ManualResetEvent ResentComplete= new ManualResetEvent(false);
+long countObject = 1000000;
+bool flag = true;
+Thread threadW = new Thread(() =>
+{
+    ResentStart.WaitOne();
+    while(flag)
+        {
+        if(countObject>0)
+        {
+                ConcurrentQueue.Enqueue(new object());
+                Interlocked.Decrement(ref countObject);
+        }
+        if(countObject == 0 && ConcurrentQueue.Count==0)
+            flag = false;
+    }
+});
+Thread threadR = new Thread(() =>
+{
+    ResentStart.WaitOne();
+    Stopwatch WatchRead = Stopwatch.StartNew();
+    while(flag)   
+        {
+            if(ConcurrentQueue.Count != 0)
+            {
+                ConcurrentQueue.TryDequeue(out obj);
+            }
+        }
+    ResentComplete.Set();
+    WatchRead.Stop();
+    Read[i] = WatchRead.ElapsedMilliseconds;
+});
+threadW.Start();
+threadR.Start();
+
+ResentStart.Set();
+
+Stopwatch TimeReadWrite = Stopwatch.StartNew();
+ResentComplete.WaitOne();
+TimeReadWrite.Stop();
+threadW.Join();
+threadR.Join();
+ReadWrite[i] = TimeReadWrite.ElapsedMilliseconds;
+}
+var ReadavverageFORConcurrentQueue = Read.Average();
+var ReadWriteavverageFORConcurrentQueue = ReadWrite.Average();
+
+Formatter.Register(typeof(ScottPlot.Plot), (p, w) => 
+w.Write(((ScottPlot.Plot)p).GetImageHtml(400, 300)), HtmlFormatter.MimeType);
+int[] numbers = Enumerable.Range(1,10).Select(x=>x).ToArray();
+ScottPlot.Plot graph1 = new();
+ScottPlot.Plot graph2 = new();
+graph1.Add.Scatter(numbers, Read);
+graph2.Add.Scatter(numbers, ReadWrite);
+Console.WriteLine("Время чтения");
+graph1
+
+#!csharp
+
+Console.WriteLine("Время чтения + записи");
+graph2
+
+#!csharp
+
+/// Для Queue
+#r "nuget:ScottPlot, 5.0.36"
+
+long[] ReadWrite = new long[10];
+long[] Read = new long[10];
+
+for (int i = 0; i<10; i++){
+  Queue<object> queue = new Queue<object>();
+  Stopwatch WatchReadWrite = Stopwatch.StartNew();
+  for(int j = 0; j<1000000; j++)
+  {
+        queue.Enqueue(new object());
+  }
+  Stopwatch WatchRead = Stopwatch.StartNew();
+  for(int k = 0; k<1000000; k++)
+    {
+        queue.Dequeue();
+    }
+    WatchReadWrite.Stop();
+    WatchRead.Stop();
+    ReadWrite[i] = WatchReadWrite.ElapsedMilliseconds;
+    Read[i] = WatchRead.ElapsedMilliseconds;
+}
+var ReadavverageFORQueue = Read.Average();
+var ReadWriteavverageFORQueue = ReadWrite.Average();
+Formatter.Register(typeof(ScottPlot.Plot), (p, w) => 
+w.Write(((ScottPlot.Plot)p).GetImageHtml(400, 300)), HtmlFormatter.MimeType);
+int[] numbers = Enumerable.Range(1,10).Select(x=>x).ToArray();
+ScottPlot.Plot graph1 = new();
+ScottPlot.Plot graph2 = new();
+graph1.Add.Scatter(numbers, Read);
+graph2.Add.Scatter(numbers, ReadWrite);
+Console.WriteLine("Время чтения");
+graph1
+
+#!csharp
+
+Console.WriteLine("Время чтения + записи");
+graph2
+
+#!csharp
+
+Console.WriteLine("Среднее выполнение чтение и записи через BlockingCollection: {0} мс , через ConcurrentQueue: {1} мс, через Queue: {2} мс", ReadWriteavverageFORBlockingCollection, ReadWriteavverageFORConcurrentQueue, ReadWriteavverageFORQueue);
+
+Console.WriteLine("Среднее выполнение чтения через BlockingCollection: {0} мс , через ConcurrentQueue: {1} мс, через Queue: {2} мс", ReadavverageFORBlockingCollection, ReadavverageFORConcurrentQueue, ReadavverageFORQueue);
+
 #!markdown
 
 ## Вывод
+
+Потокобезопасная очередь ConcurrentQueue справляется быстрее (средняя скорость 138.4 мс), чем BlockingCollection (средняя скорость 242.7 мс)
+
+По сравнению со всеми с задачей обычная непотокобезопасная очередь Queue справляется быстрее всех (средняя скорость чтения 2.2 мс, чтения и записи 18.7 мс)
+
+В чтении и записи Quene быстрее ConcurrentQueue примерно на 92,2% В чтении примерно 98,5%
