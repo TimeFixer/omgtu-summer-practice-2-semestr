@@ -48,12 +48,14 @@ using System.Threading;
 public class ServerThread
 {
     static bool soft = false;
-    readonly BlockingCollection<ICommand> commandQueue = new BlockingCollection<ICommand>();
+
     static bool stopped = false;
     static AutoResetEvent AutoResetEvent = new AutoResetEvent(false);
     static ConcurrentQueue<ICommand> ConcurrentQueue = new ConcurrentQueue<ICommand>();
     static Thread thread = new Thread(() =>
     {
+        while (!stopped)
+        {
             if (ConcurrentQueue.Count != 0)
             {
                 ConcurrentQueue.TryDequeue(out ICommand command);
@@ -67,25 +69,14 @@ public class ServerThread
             {
                 AutoResetEvent.WaitOne();
             }
+        }
         
     });
     
-    public void Run()
-    {
-        while (!stopped)
-        {
-            try
-            {
-                ICommand command = commandQueue.Take();
-                command.Execute();
-            }
-            catch (Exception e){}
-        }
-    }
 
     public void AddCommand(ICommand command)
     {
-        commandQueue.Add(command);
+        ConcurrentQueue.Enqueue(command);
     }
 
     public void HardStop()
@@ -134,6 +125,10 @@ public class SoftStopCommand : ICommand
         }
     }
 }
+    public void Start()
+    {
+        thread.Start();
+    }
 }
 public class TestSoft : ICommand
 {
@@ -149,28 +144,23 @@ public class TestHard : ICommand
         Console.WriteLine("тест hard");
     }
 }
-public class Other : ICommand
-{
-    public void Execute()
-    {
-        Console.WriteLine("Остальной поток...");
-    }
-}
 
 #!csharp
 
         ServerThread serverThread = new ServerThread();
-        Thread thread = new Thread(serverThread.Run);
-        thread.Start();
+        serverThread.Start();
 
         ICommand hardStopCommand = new ServerThread.HardStopCommand(serverThread);
-        ICommand softStopCommand = new ServerThread.SoftStopCommand(serverThread);
+        
 
 
-        serverThread.AddCommand(new TestSoft());
-        serverThread.AddCommand(hardStopCommand);
         serverThread.AddCommand(new TestHard());
-        serverThread.AddCommand(softStopCommand);
-        serverThread.AddCommand(new Other());
+        serverThread.AddCommand(hardStopCommand);
 
-        thread.Join();
+#!csharp
+
+ServerThread serverThread = new ServerThread();
+serverThread.Start();
+ICommand softStopCommand = new ServerThread.SoftStopCommand(serverThread);
+serverThread.AddCommand(new TestSoft());
+serverThread.AddCommand(softStopCommand);
