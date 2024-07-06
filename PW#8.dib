@@ -37,14 +37,14 @@
 
 public interface IScheduler
 {
-    bool HasCommand()
+    bool HasCommand();
     ICommand Select();
     void Add(ICommand cmd);
 }
 
 #!markdown
 
-Необходимо реализовать поток, который способен реализоввывать длительные операции.
+Необходимо реализовать поток, который способен реализовывать длительные операции.
 
 **Указание.** 
 1. В практической работе №7 из очереди команды извлекались блокируеммым образом с помощью метода Take(), при наличии планировщика так делать нельзя: поток
@@ -55,3 +55,79 @@ public interface IScheduler
 Необходимо учесть этот момент при реализации очереди.
 
 2. Для обепечения справедливости стратегии планировщика в слабом смысле использовать стратегию Round Robbin (циклическую) для определения следующего потока на исполнение.
+
+#!csharp
+
+public interface ICommand
+{
+    void Execute();
+}
+
+#!csharp
+
+using System.Threading;
+public class RoundRobinScheduler : IScheduler
+{
+    Queue<ICommand> commands = new Queue<ICommand>();
+    AutoResetEvent AutoResetEvent = new AutoResetEvent(false);
+    bool completed = false;
+
+    public bool HasCommand()
+    {
+        return commands.Count > 0;
+    }
+
+    public ICommand Select()
+    {
+        if (commands.TryDequeue(out ICommand cmd))
+        {
+            commands.Dequeue();
+            commands.Enqueue(cmd);
+            return cmd;
+        }
+        return null;
+    }
+    
+    public void Add(ICommand cmd)
+    {
+        commands.Enqueue(cmd);
+        AutoResetEvent.Set();
+    }
+
+    public void Start()
+    {
+        while (HasCommand()||!completed)
+        {
+            if (HasCommand())
+            {
+                ICommand cmd = Select();
+                cmd.Execute();
+            }
+            else
+            {
+                AutoResetEvent.WaitOne();
+            }
+        }
+    }
+
+    public void Stop()
+    {
+        completed = true;
+    }
+}
+    public class Test: ICommand
+    {
+        public void Execute()
+        {
+            Console.WriteLine("Test");
+        }
+
+    }
+
+#!csharp
+
+RoundRobinScheduler RoundRobin = new RoundRobinScheduler();
+Thread sheduler_thread = new Thread(RoundRobin.Start);
+sheduler_thread.Start();
+RoundRobin.Add(new Test());
+RoundRobin.Stop();
