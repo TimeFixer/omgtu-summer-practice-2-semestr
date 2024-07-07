@@ -20,11 +20,10 @@
 
 #!csharp
 
-interface ICommand
+public interface ICommand
 {
     void Execute();
 }
-
 
 public class TestCommand(int id) : ICommand
 {
@@ -39,3 +38,156 @@ public class TestCommand(int id) : ICommand
 #!markdown
 
 Необходимо проиллюстрировать выполнение 5 экземпляров TestCommand 3 раза, затем остановить поток с помощью HardStop.
+
+#!csharp
+
+using System.Collections.Concurrent;
+using System.Threading;
+
+public interface ICommand
+{
+    void Execute();
+    int Count { get; set; }
+}
+
+public class HardStopCommand : ICommand
+{
+    public int Count { get; set;} = 1;
+
+    public void Execute()
+    {
+        throw new ThreadInterruptedException();
+    }
+}
+
+public class TestCommand : ICommand
+{
+    private int id;
+    private int counter = 0;
+
+    public TestCommand(int id)
+    {
+        this.id = id;
+    }
+
+    public int Count { get; set; } = 3;
+
+    public void Execute()
+    {
+        Console.WriteLine($"Поток {id} вызов {++counter}");
+    }
+}
+
+#!csharp
+
+public interface IScheduler
+{
+    bool HasCommand();
+    ICommand Select();
+    void AddCommand(ICommand cmd);
+}
+
+#!csharp
+
+public class RoundRobinScheduler : IScheduler
+{
+    private ConcurrentQueue<ICommand> commands = new ConcurrentQueue<ICommand>();
+
+    public bool HasCommand()
+    {
+        return !commands.IsEmpty;
+    }
+
+    public ICommand Select()
+    {
+        if (commands.TryDequeue(out ICommand command))
+        {
+            return command;
+        }
+        return null;
+    }
+
+    public void AddCommand(ICommand cmd)
+    {
+        commands.Enqueue(cmd);
+    }
+}
+
+#!csharp
+
+public class ServerThread
+{
+    private ConcurrentQueue<ICommand> newCommands = new ConcurrentQueue<ICommand>();
+    private IScheduler scheduler = new RoundRobinScheduler();
+    private Thread thread;
+    private bool isRunning = false;
+
+    public ServerThread()
+    {
+        thread = new Thread(Run);
+        thread.Start();
+    }
+
+    public void EnqueueCommand(ICommand command)
+    {
+        newCommands.Enqueue(command);
+    }
+
+    public void HardStop()
+    {
+        EnqueueCommand(new HardStopCommand());
+    }
+
+    private void Run()
+    {
+        isRunning = true;
+        while (isRunning)
+        {
+            if (newCommands.TryDequeue(out ICommand command))
+            {
+                scheduler.AddCommand(command);
+            }
+
+            while (scheduler.HasCommand())
+            {
+                try
+                {
+                    command = scheduler.Select();
+                    if (command != null)
+                    {
+                        command.Execute();
+                        command.Count--;
+                        if (command.Count > 0)
+                        {
+                            scheduler.AddCommand(command);
+                        }
+                    }
+                    else
+                    {
+
+                        break;
+                    }
+                }
+                catch (ThreadInterruptedException)
+                {
+                    isRunning = false;
+                    break;
+                }
+            }
+        }
+    }
+    public Thread GetThread() => thread;
+}
+
+#!csharp
+
+ServerThread serverThread = new ServerThread();
+for (int i = 1; i <= 5; i++)
+{
+    serverThread.EnqueueCommand(new TestCommand(i) 
+    { 
+        Count = 3 
+    });
+}
+serverThread.EnqueueCommand(new HardStopCommand());
+serverThread.GetThread().Join();
