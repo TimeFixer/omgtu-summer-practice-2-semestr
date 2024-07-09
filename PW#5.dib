@@ -20,10 +20,10 @@
 ## Задание.
 Реализовать приложение Ping-Pong.
 
-Создать дав потока, каждый из которых в цикле читает данные из BlockingCollection<Message>. После того, как поток прочитал объект из очереди, вызвал его метод Handle(), он создает новый объект класса Message и записывает его в очередь другого потока. Каждый поток всего должен обработать 100 сообщений.
+Создать два потока, каждый из которых в цикле читает данные из BlockingCollection<Message>. После того, как поток прочитал объект из очереди, вызвал его метод Handle(), он создает новый объект класса Message и записывает его в очередь другого потока. Каждый поток всего должен обработать 100 сообщений.
 
 **Указание**.
-1. Как запустить процесс обмена объектами Message между потоками? Первый объект Message пишем в очередь одного из потоков прямо из кода, коорый жти потоки стартовал.
+1. Как запустить процесс обмена объектами Message между потоками? Первый объект Message пишем в очередь одного из потоков прямо из кода, который эти потоки стартовал.
 2. Не забываем дождаться завершения работы потоков.
 
 #!csharp
@@ -56,11 +56,41 @@ class Message
 #!csharp
 
 using System.Collections.Concurrent;
-
+using System.Threading;
 var queue1 = new BlockingCollection<Message>(2); //очередь первого потока
 var queue2 = new BlockingCollection<Message>(2); //очередь второго потока
+Barrier barrier = new Barrier(2);
+Message Message = new Message();
+Message MessageFirst = new Message();
+Message MessageLast = new Message();
+Thread thread1= new Thread(()=>
+{
+    for(int i = 0; i < 100; i++)
+    {
+        Message = queue1.Take();
+        Message.Handle();
+        queue2.Add(new Message());
+    }
+    barrier.SignalAndWait();
+    });
+Thread thread2 = new Thread(()=>
+{
+    for(int i = 0; i < 100; i++)
+    {
+        Message = queue2.Take();
+        Message.Handle();
+        queue1.Add(new Message());
+    }
+    barrier.SignalAndWait();
+});
 
-// Здесь писать решение
+queue1.Add(MessageFirst);
+
+thread1.Start();
+thread2.Start();
+thread1.Join();
+thread2.Join();
+MessageLast = queue1.Take();
 
 #!csharp
 
