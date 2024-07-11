@@ -38,3 +38,129 @@ ServerThread может менять свое поведение для обра
 Отсутствие Команд в очереди потока не должно требовать значительных затрат процессорного времени. Значительными считаются затраты, которые зависят от времени простоя потока.
 
 Написать проверку, которая гарантирует правильное выполнение команд HardStop и SoftStop.
+
+#!csharp
+
+using System;
+using System.Collections.Concurrent;
+using System.Threading;
+
+public class ServerThread
+{
+    static bool soft = false;
+
+    static bool stopped = false;
+    static AutoResetEvent AutoResetEvent = new AutoResetEvent(false);
+    static ConcurrentQueue<ICommand> ConcurrentQueue = new ConcurrentQueue<ICommand>();
+    static Thread thread = new Thread(() =>
+    {
+        while (!stopped)
+        {
+            if (ConcurrentQueue.Count != 0)
+            {
+                ConcurrentQueue.TryDequeue(out ICommand command);
+                try
+                {
+                    command.Execute();
+                }
+                catch (Exception e){}
+            }
+            else if (ConcurrentQueue.Count == 0 && !soft)
+            {
+                AutoResetEvent.WaitOne();
+            }
+        }
+        
+    });
+    
+
+    public void AddCommand(ICommand command)
+    {
+        ConcurrentQueue.Enqueue(command);
+    }
+
+    public void HardStop()
+    {
+        Thread.CurrentThread.Interrupt();
+    }
+
+    public void SoftStop()
+    {
+        stopped = true;
+    }
+
+
+public class HardStopCommand : ICommand
+{
+    private ServerThread serverThread;
+
+    public HardStopCommand(ServerThread serverThread)
+    {
+        this.serverThread = serverThread;
+    }
+
+    public void Execute()
+    {
+        if (Thread.CurrentThread == thread)
+        {
+            serverThread.HardStop();
+        }
+    }
+}
+
+public class SoftStopCommand : ICommand
+{
+    private ServerThread serverThread;
+
+    public SoftStopCommand(ServerThread serverThread)
+    {
+        this.serverThread = serverThread;
+    }
+
+    public void Execute()
+    {
+        if (Thread.CurrentThread == thread)
+        {
+            serverThread.SoftStop();
+        }
+    }
+}
+    public void Start()
+    {
+        thread.Start();
+    }
+}
+public class TestSoft : ICommand
+{
+    public void Execute()
+    {
+        Console.WriteLine("тест soft");
+    }
+}
+public class TestHard : ICommand
+{
+    public void Execute()
+    {
+        Console.WriteLine("тест hard");
+    }
+}
+
+#!csharp
+
+        ServerThread serverThread = new ServerThread();
+        serverThread.Start();
+
+        ICommand hardStopCommand = new ServerThread.HardStopCommand(serverThread);
+        
+
+
+        serverThread.AddCommand(new TestHard());
+        serverThread.AddCommand(hardStopCommand);
+
+#!csharp
+
+ServerThread serverThread = new ServerThread();
+serverThread.Start();
+ICommand softStopCommand = new ServerThread.SoftStopCommand(serverThread);
+serverThread.AddCommand(new TestSoft());
+serverThread.AddCommand(softStopCommand);
